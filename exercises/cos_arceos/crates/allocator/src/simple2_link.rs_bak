@@ -1,0 +1,128 @@
+//! Simple memory allocation.
+//!
+//! TODO: more efficient
+
+use core::alloc::Layout;
+use core::num::NonZeroUsize;
+use core::ptr::NonNull;
+//use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
+use core::ops::Box;
+use crate::{AllocResult, BaseAllocator, ByteAllocator};
+
+ const HEAP_SPACE_SIZE:usize = 4 * 1024 * 1024 ;
+
+static mut HEAP_SPACE: [u8; HEAP_SPACE_SIZE] = [0; HEAP_SPACE_SIZE];
+
+
+struct Node {
+    next: Option<NonNull<Node>>,
+    prev: Option<NonNull<Node>>,
+    size: i32,
+    start:i32,
+    is_use:bool
+}
+
+pub struct SimpleByteAllocator {
+    head: Option<NonNull<Node>>,
+    tail: Option<NonNull<Node>>,
+    total_size:i32,
+    use_size:i32,
+    len: i32
+}
+
+impl Node {
+    fn new(start_: i32, size_ : i32, is_use_ :i32) -> Self {
+           Node { next: None, prev: None, size: size_, start: start_, is_use : is_use_ }
+    }
+   
+    fn into_start(self: Box<Self>) -> i32 {
+       //消费了Box，堆内存被释放并将element拷贝到栈
+       self.start
+    }
+    
+    fn into_size(self: Box<Self>) -> i32 {
+        //消费了Box，堆内存被释放并将element拷贝到栈
+        self.size
+    }
+
+    fn into_is_use(self: Box<Self>) -> i32 {
+        //消费了Box，堆内存被释放并将element拷贝到栈
+        self.is_use
+    }
+
+}
+
+
+impl SimpleByteAllocator {
+    pub const fn new() -> Self {
+        Self {head: None, tail: None, total_size: 0, use_size: 0, len:0}
+    }
+
+    pub fn push_front(&mut self, start:i32, size: i32, is_use: bool) {
+        //用box从堆内存申请一个节点，push_front_node见后面函数
+        self.push_front_node(Box::new(Node::new(start, size, is_use)));
+    }
+    
+    fn push_front_node(&mut self, mut node: Box<Node>) {
+        // 整体全是不安全代码
+        unsafe {
+            node.next = self.head;
+            node.prev = None;
+            //需要将Box的堆内存leak出来使用。此块内存后继如果还在链表，需要由LinkedList负责drop.后面可以看到LinkedList的drop函数的处理。
+            //如果pop出链表，那会重新用这里leak出来的NonNull<Node<T>>生成Box,再由Box释放
+            let node = Some(Box::leak(node).into());
+
+            match self.head {
+                None => self.tail = node,
+                // 目前采用NonNull<Node<T>>的方案，此处代码就很自然
+                // 如果换成Box<Node<T>>的方案，这里就要类似如下:
+                // 先用take将head复制到栈中创建的新变量，
+                // 新变量的prev置为node
+                // 用replace将新变量再复制回head。
+                // 也注意，此处很容易也采用先take, 修改，然后replace的方案
+                // 要注意规避Option导致的这个两次拷贝方案
+                Some(head) => (*head.as_ptr()).prev = node,
+            }
+
+           self.head = node;
+           self.len += 1;
+        }
+    }
+}
+
+impl BaseAllocator for SimpleByteAllocator {
+    fn init(&mut self, _start: usize, _size: usize) {
+        self.total_size = _size;
+
+
+    }
+
+    fn add_memory(&mut self, _start: usize, _size: usize) -> AllocResult {
+        todo!();
+        self.total_size  += _size;
+    }
+}
+
+impl ByteAllocator for SimpleByteAllocator {
+    fn alloc(&mut self, _layout: Layout) -> AllocResult<NonZeroUsize> {
+        todo!();
+        self.use_size += _layout.size();
+    }
+
+    fn dealloc(&mut self, _pos: NonZeroUsize, _layout: Layout) {
+        todo!();
+        self.use_size -= _layout.size();
+    }
+
+    fn total_bytes(&self) -> usize {
+        self.total_size
+    }
+
+    fn used_bytes(&self) -> usize {
+        self.use_size
+    }
+
+    fn available_bytes(&self) -> usize {
+        self.total_size - self.use_size
+    }
+}
