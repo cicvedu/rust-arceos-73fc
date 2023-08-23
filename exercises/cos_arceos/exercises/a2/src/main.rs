@@ -20,6 +20,7 @@ fn main() {
         while FLAG.load(Ordering::Relaxed) < 1 {
             // For cooperative scheduler, we must yield here!
             // For preemptive scheduler, just relaxed! Leave it for scheduler.
+            thread::yield_now();
         }
 
         let _ = FLAG.fetch_add(1, Ordering::Relaxed);
