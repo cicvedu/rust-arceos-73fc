@@ -188,7 +188,7 @@ impl VfsNodeOps for DirNode {
             log::warn!("rename branch 2 : {} {}", _src, _dst);
             Err(VfsError::InvalidInput) // remove '.' or '..
         } else {
-            let (dst_name, dst_rest) = split_path(dst_rest.unwrap());
+            let (dst_name, dst_rest) = split_path(dst_rest.unwrap()); //    好像src多递进了一层文件夹？
             log::warn!("rename branch 3 : {} {}", src_name, dst_name);
             let mut children = self.children.write();
             let node = children.get(src_name).ok_or(VfsError::NotFound)?;
