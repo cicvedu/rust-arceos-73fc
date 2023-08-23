@@ -146,14 +146,14 @@ impl ByteAllocator for SimpleByteAllocator {
     fn dealloc(&mut self, _pos: NonZeroUsize, _layout: Layout) {
         let mut idx:usize = 1;
         let pos = _pos.get();
-        // loop {
-        //     if self.book_array[idx].start <= pos && pos <  self.book_array[idx].start  + self.book_array[idx].size  && self.book_array[idx].is_use {
-        //         ();
-        //     }
+        loop {
+            if self.book_array[idx].start <= pos && pos <  self.book_array[idx].start  + self.book_array[idx].size  && self.book_array[idx].is_use {
+                ();
+            }
 
-        //     idx = self.book_array[idx].next;
-        //     if idx == 0 { break; }
-        // }
+            idx = self.book_array[idx].next;
+            if idx == 0 { break; }
+        }
         self.use_size -= _layout.size();
     }
 

@@ -193,15 +193,15 @@ impl Device for DeviceWrapper {
 
     fn receive(&mut self, _timestamp: Instant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         let mut dev = self.inner.borrow_mut();
-        if let Err(e) = dev.recycle_tx_buffers() {
+        if let Err(e) = dev.inner.recycle_tx_buffers() {
             warn!("recycle_tx_buffers failed: {:?}", e);
             return None;
         }
 
-        if !dev.can_transmit() {
+        if !dev.inner.can_transmit() {
             return None;
         }
-        let rx_buf = match dev.receive() {
+        let rx_buf = match dev.inner.receive() {
             Ok(buf) => buf,
             Err(err) => {
                 if !matches!(err, DevError::Again) {
@@ -215,11 +215,11 @@ impl Device for DeviceWrapper {
 
     fn transmit(&mut self, _timestamp: Instant) -> Option<Self::TxToken<'_>> {
         let mut dev = self.inner.borrow_mut();
-        if let Err(e) = dev.recycle_tx_buffers() {
+        if let Err(e) = dev.inner.recycle_tx_buffers() {
             warn!("recycle_tx_buffers failed: {:?}", e);
             return None;
         }
-        if dev.can_transmit() {
+        if dev.inner.can_transmit() {
             Some(AxNetTxToken(&self.inner))
         } else {
             None
@@ -254,7 +254,7 @@ impl<'a> RxToken for AxNetRxToken<'a> {
             rx_buf.packet()
         );
         let result = f(rx_buf.packet_mut());
-        self.0.borrow_mut().recycle_rx_buffer(rx_buf).unwrap();
+        self.0.borrow_mut().inner.recycle_rx_buffer(rx_buf).unwrap();
         result
     }
 }
@@ -265,10 +265,10 @@ impl<'a> TxToken for AxNetTxToken<'a> {
         F: FnOnce(&mut [u8]) -> R,
     {
         let mut dev = self.0.borrow_mut();
-        let mut tx_buf = dev.alloc_tx_buffer(len).unwrap();
+        let mut tx_buf = dev.inner.alloc_tx_buffer(len).unwrap();
         let ret = f(tx_buf.packet_mut());
         trace!("SEND {} bytes: {:02X?}", len, tx_buf.packet());
-        dev.transmit(tx_buf).unwrap();
+        dev.inner.transmit(tx_buf).unwrap();
         ret
     }
 }
@@ -311,7 +311,7 @@ pub fn bench_receive() {
 }
 
 pub(crate) fn init(net_dev: AxNetDevice) {
-    let ether_addr = EthernetAddress(net_dev.mac_address().0);
+    let ether_addr = EthernetAddress(net_dev.inner.mac_address().0);
     let eth0 = InterfaceWrapper::new("eth0", net_dev, ether_addr);
 
     let ip = IP.parse().expect("invalid IP address");
